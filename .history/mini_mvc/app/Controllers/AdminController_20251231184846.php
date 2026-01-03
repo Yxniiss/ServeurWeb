@@ -1,0 +1,196 @@
+<?php
+
+namespace Mini\Controllers;
+
+use Mini\Core\Auth;
+use Mini\Core\Database;
+
+class AdminController
+{
+    public function index()
+    {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+
+        //var_dump($_SESSION); // debug
+        Auth::requireAdmin();
+
+        require_once __DIR__ . '/../Views/admin/dashboard.php';
+    }
+
+    public function adminProducts()
+    {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+
+        Auth::requireAdmin();
+
+        // Récupérer tous les produits
+        $pdo = Database::getPDO();
+        $stmt = $pdo->query("SELECT * FROM products ORDER BY id DESC");
+        $products = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+        require_once __DIR__ . '/../Views/admin/products.php';
+    }
+
+    public function createProduct()
+    {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+
+        Auth::requireAdmin();
+
+        $error = null;
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $name = $_POST['name'] ?? '';
+            $description = $_POST['description'] ?? '';
+            $price = $_POST['price'] ?? 0;
+
+            $imageName = null;
+            if (!empty($_FILES['image']['name'])) {
+                $ext = pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION);
+                $imageName = uniqid() . '.' . $ext;
+                move_uploaded_file($_FILES['image']['tmp_name'], __DIR__ . '/../../public/images/products/' . $imageName);
+            }
+
+            if (!$name || !$description || !$price || !$imageName) {
+                $error = "Tous les champs sont obligatoires avec une image.";
+            } else {
+                $pdo = Database::getPDO();
+                $stmt = $pdo->prepare("INSERT INTO products (name, description, price, image) VALUES (:name, :description, :price, :image)");
+                $stmt->execute([
+                    'name' => $name,
+                    'description' => $description,
+                    'price' => $price,
+                    'image' => $imageName
+                ]);
+
+                header('Location: /admin/products');
+                exit;
+            }
+        }
+
+        require_once __DIR__ . '/../Views/admin/create_product.php';
+    }
+
+    public function editProduct()
+    {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+
+        Auth::requireAdmin();
+
+        $pdo = Database::getPDO();
+        $id = $_GET['id'] ?? null;
+
+        if (!$id) {
+            header('Location: /admin/products');
+            exit;
+        }
+
+        // Récupérer le produit existant
+        $stmt = $pdo->prepare("SELECT * FROM products WHERE id = :id");
+        $stmt->execute(['id' => $id]);
+        $product = $stmt->fetch(\PDO::FETCH_ASSOC);
+
+        if (!$product) {
+            header('Location: /admin/products');
+            exit;
+        }
+
+        $error = null;
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $name = $_POST['name'] ?? '';
+    $description = $_POST['description'] ?? '';
+    $price = $_POST['price'] ?? 0;
+
+    // ✅ Récupérer la checkbox bestseller
+    $isBestseller = isset($_POST['is_bestseller']) ? 1 : 0;
+
+    // Gestion de l'image
+    $imageName = $product['image'];
+    if (!empty($_FILES['image']['name'])) {
+        $ext = pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION);
+        $imageName = uniqid() . '.' . $ext;
+        move_uploaded_file($_FILES['image']['tmp_name'], __DIR__ . '/../../public/images/products/' . $imageName);
+    }
+
+    if (!$name || !$description || !$price) {
+        $error = "Tous les champs sont obligatoires.";
+    } else {
+        $stmt = $pdo->prepare("UPDATE products SET name = :name, description = :description, price = :price, image = :image, is_bestseller = :is_bestseller WHERE id = :id");
+        $stmt->execute([
+            'name' => $name,
+            'description' => $description,
+            'price' => $price,
+            'image' => $imageName,
+            'is_bestseller' => $isBestseller,
+            'id' => $id
+        ]);
+
+        header('Location: /admin/products');
+        exit;
+    }
+}
+
+    }
+
+    public function deleteProduct()
+    {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+
+        Auth::requireAdmin();
+
+        $pdo = Database::getPDO();
+        $id = $_GET['id'] ?? null;
+
+        if ($id) {
+            // Supprimer le produit
+            $stmt = $pdo->prepare("DELETE FROM products WHERE id = :id");
+            $stmt->execute(['id' => $id]);
+        }
+
+        header('Location: /admin/products');
+        exit;
+    }
+
+    public function storeProduct()
+{
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+
+    Auth::requireAdmin();
+
+    // 🔒 Sécurité basique
+    if (!isset($_FILES['image']) || $_FILES['image']['error'] !== 0) {
+        die('Erreur upload image');
+    }
+
+    // 📁 Dossier cible
+    $uploadDir = dirname(__DIR__, 2) . '/public/images/products/';
+
+    // 🔑 Nom unique
+    $extension = pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION);
+    $filename = uniqid('product_', true) . '.' . $extension;
+
+    // 📦 Chemin final
+    $destination = $uploadDir . $filename;
+
+    // 🚚 Déplacement réel du fichier
+    move_uploaded_file($_FILES['image']['tmp_name'], $destination);
+
+    // 🧪 DEBUG TEMPORAIRE
+    echo "Image uploadée : " . $filename;
+    exit;
+}
+
+}
